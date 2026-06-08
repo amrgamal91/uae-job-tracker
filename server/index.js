@@ -14,11 +14,12 @@ const distPath = path.join(__dirname, "../client/dist");
 app.use(express.static(distPath));
  
 app.get("/api/jobs", async (req, res) => {
-  const { query = "Senior Frontend Engineer UAE", page = 1 } = req.query;
+  const { query = "Senior Frontend Engineer", page = 1 } = req.query;
   console.log(`[JOB_SEARCH] Query: ${query}, Page: ${page}`);
   
   try {
-    const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=${page}&num_b=20&date_posted=week&country=ae`;
+    // JSearch API with proper parameters
+    const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=${page}&num_pages=1`;
     console.log(`[JOB_SEARCH] Fetching from: ${url}`);
     
     const response = await fetch(url, {
@@ -29,12 +30,16 @@ app.get("/api/jobs", async (req, res) => {
       },
     });
  
+    const responseText = await response.text();
+    console.log(`[JOB_SEARCH] Response status: ${response.status}`);
+    console.log(`[JOB_SEARCH] Response body (first 500 chars): ${responseText.slice(0, 500)}`);
+ 
     if (!response.ok) {
       console.error(`[JOB_SEARCH] API error: ${response.status} ${response.statusText}`);
-      return res.status(response.status).json({ error: `API error: ${response.statusText}` });
+      return res.status(response.status).json({ error: `API error: ${response.statusText}`, details: responseText });
     }
  
-    const data = await response.json();
+    const data = JSON.parse(responseText);
     console.log(`[JOB_SEARCH] Success: ${data.data?.length || 0} jobs found`);
     res.json(data);
   } catch (err) {
