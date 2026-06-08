@@ -1,9 +1,4 @@
-import { useCallback, useState } from "react";
-
-// ── Config ────────────────────────────────────────────────────────────────────
-// In production on Render, API calls go to the same domain (Render serves both)
-// In dev, Vite proxies /api to localhost:4000
-const API_BASE = ""; // Empty string means same origin
+import { useState } from "react";
 
 const PROFILE_SKILLS = [
   "Angular","React","Next.js","TypeScript","JavaScript","RxJS","Node.js",
@@ -19,7 +14,6 @@ const QUICK_SEARCHES = [
   "Principal Frontend Engineer",
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function scoreJob(job) {
   const text = `${job.job_title} ${job.job_description || ""} ${(job.job_required_skills || []).join(" ")}`.toLowerCase();
   let score = 0;
@@ -35,7 +29,6 @@ function scoreJob(job) {
 const scoreColor = (s) => s >= 80 ? "#00C853" : s >= 60 ? "#FFB300" : "#FF5252";
 const scoreBg    = (s) => s >= 80 ? "#E8F5E9" : s >= 60 ? "#FFF8E1" : "#FFEBEE";
 
-// ── Components ────────────────────────────────────────────────────────────────
 function Badge({ children, color = "#1565C0", bg = "#E3F2FD" }) {
   return (
     <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 6, background: bg, color, fontWeight: 600, display: "inline-block" }}>
@@ -45,32 +38,36 @@ function Badge({ children, color = "#1565C0", bg = "#E3F2FD" }) {
 }
 
 function JobCard({ job, onSave, onApply, isSaved, isApplied }) {
-  const [open, setOpen]     = useState(false);
+  const [open, setOpen] = useState(false);
   const [aiNote, setAiNote] = useState("");
   const [aiLoad, setAiLoad] = useState(false);
 
   const genNote = async () => {
-    setAiLoad(true); setAiNote("");
+    setAiLoad(true);
+    setAiNote("");
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content:
-            `Write a punchy 3-sentence cover note. No "Dear Hiring Manager". Start strong.\n\nCandidate: Amr Gamal, 14 years, Senior Frontend Engineer & Team Lead.\nSkills: Angular, React, TypeScript, RxJS, Node.js, CI/CD.\nHighlights: Led Egypt's first corporate online payment platform (Banque Misr). Led national government platforms at ELM Saudi Arabia. Currently Frontend Team Lead at NWC Saudi Arabia.\n\nJob: ${job.job_title} at ${job.employer_name}, ${job.job_city || "UAE"}.\n\nMax 75 words. Confident tone.`
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: `Write a punchy 3-sentence cover note. No "Dear Hiring Manager". Start strong.\n\nCandidate: Amr Gamal, 14 years, Senior Frontend Engineer & Team Lead.\nSkills: Angular, React, TypeScript, RxJS, Node.js, CI/CD.\nHighlights: Led Egypt's first corporate online payment platform (Banque Misr). Led national government platforms at ELM Saudi Arabia. Currently Frontend Team Lead at NWC Saudi Arabia.\n\nJob: ${job.job_title} at ${job.employer_name}, ${job.job_city || "UAE"}.\n\nMax 75 words. Confident tone.`
           }],
         }),
       });
       const d = await res.json();
       setAiNote(d.content?.[0]?.text || "Error.");
-    } catch { setAiNote("Could not connect to AI."); }
+    } catch {
+      setAiNote("Could not connect to AI.");
+    }
     setAiLoad(false);
   };
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: open ? "2px solid #1F4E79" : "2px solid transparent", transition: "all .2s", marginBottom: 12 }}>
-      {/* Top row */}
       <div onClick={() => setOpen(!open)} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start", cursor: "pointer" }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: "#1A2B4A", marginBottom: 3 }}>{job.job_title}</div>
@@ -101,7 +98,6 @@ function JobCard({ job, onSave, onApply, isSaved, isApplied }) {
         </div>
       </div>
 
-      {/* Expanded */}
       {open && (
         <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1.5px solid #F0F4F8" }}>
           {job.job_description && (
@@ -151,7 +147,6 @@ function JobCard({ job, onSave, onApply, isSaved, isApplied }) {
   );
 }
 
-// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [jobs, setJobs]       = useState([]);
   const [loading, setLoading] = useState(false);
@@ -159,51 +154,65 @@ export default function App() {
   const [saved, setSaved]     = useState([]);
   const [applied, setApplied] = useState([]);
   const [tab, setTab]         = useState("search");
-  const [query, setQuery]     = useState("Senior Frontend Engineer");
+  const [searchText, setSearchText] = useState("Senior Frontend Engineer");
   const [minScore, setMinScore] = useState(0);
   const [fetched, setFetched] = useState(false);
 
-  const fetchJobs = useCallback(async (q) => {
-    const searchQ = q || query;
-    console.log("[Frontend] Fetching with query:", searchQ);
-    
-    setLoading(true); setError(""); setJobs([]); setFetched(false);
+  const handleSearch = async (q) => {
+    const queryStr = q || searchText;
+    if (!queryStr.trim()) {
+      setError("Please enter a search query");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setJobs([]);
+    setFetched(false);
+
     try {
-      const url = `${API_BASE}/api/jobs?query=${encodeURIComponent(searchQ)}`;
-      console.log("[Frontend] Request URL:", url);
+      const url = `/api/jobs?query=${encodeURIComponent(queryStr)}`;
+      console.log("Fetching:", url);
       
       const res = await fetch(url);
-      console.log("[Frontend] Response status:", res.status);
-      
+      console.log("Response status:", res.status);
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || `HTTP ${res.status}`);
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
       }
-      
+
       const data = await res.json();
-      console.log("[Frontend] Received data:", data);
-      
-      if (data.error) throw new Error(data.error);
-      if (!data.data) throw new Error("No jobs data in response");
-      
-      const scored = (data.data || []).map((j) => ({ ...j, ...scoreJob(j) })).sort((a, b) => b.score - a.score);
+      console.log("Data received:", data);
+
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error("No job data received");
+      }
+
+      const scored = data.data
+        .map((j) => ({ ...j, ...scoreJob(j) }))
+        .sort((a, b) => b.score - a.score);
+
       setJobs(scored);
       setFetched(true);
-    } catch (e) { 
-      console.error("[Frontend] Error:", e.message);
-      setError(e.message); 
+    } catch (e) {
+      console.error("Error:", e);
+      setError(e.message);
     }
     setLoading(false);
-  }, [query]);
+  };
 
   const toggle = (list, setList, job) =>
-    setList((prev) => prev.find((j) => j.job_id === job.job_id) ? prev.filter((j) => j.job_id !== job.job_id) : [...prev, job]);
+    setList((prev) =>
+      prev.find((j) => j.job_id === job.job_id)
+        ? prev.filter((j) => j.job_id !== job.job_id)
+        : [...prev, job]
+    );
 
   const filtered = jobs.filter((j) => j.score >= minScore);
 
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8" }}>
-      {/* ── Header ── */}
       <div style={{ background: "linear-gradient(135deg,#1A2B4A 0%,#1F4E79 100%)", padding: "24px 28px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -214,7 +223,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {[["search","🔍 Search"],["saved","🔖 Saved"],["applied","✅ Applied"]].map(([t, label]) => (
+            {[["search", "🔍 Search"], ["saved", "🔖 Saved"], ["applied", "✅ Applied"]].map(([t, label]) => (
               <button key={t} onClick={() => setTab(t)}
                 style={{ padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, background: tab === t ? "#4FC3F7" : "rgba(255,255,255,0.12)", color: tab === t ? "#1A2B4A" : "#fff" }}>
                 {label}{t === "saved" && saved.length > 0 ? ` (${saved.length})` : ""}{t === "applied" && applied.length > 0 ? ` (${applied.length})` : ""}
@@ -223,9 +232,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Stats */}
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          {[["Live Results", jobs.length, "#4FC3F7"],["High Match 80+", jobs.filter(j=>j.score>=80).length, "#69F0AE"],["Saved", saved.length, "#FFD740"],["Applied", applied.length, "#FF80AB"]].map(([l, v, c]) => (
+          {[["Live Results", jobs.length, "#4FC3F7"], ["High Match 80+", jobs.filter(j => j.score >= 80).length, "#69F0AE"], ["Saved", saved.length, "#FFD740"], ["Applied", applied.length, "#FF80AB"]].map(([l, v, c]) => (
             <div key={l} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 18px", borderLeft: `3px solid ${c}` }}>
               <div style={{ color: c, fontWeight: 700, fontSize: 22, fontFamily: "'DM Mono', monospace" }}>{v}</div>
               <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 2 }}>{l}</div>
@@ -235,15 +243,22 @@ export default function App() {
       </div>
 
       <div style={{ padding: "24px 28px" }}>
-        {/* ── Search Tab ── */}
         {tab === "search" && (
           <>
             <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && fetchJobs()}
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="e.g. Senior Frontend Engineer"
-                style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E0E7EF", fontFamily: "inherit", fontSize: 13, outline: "none" }} />
-              <button onClick={() => fetchJobs()} disabled={loading}
-                style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg,#1F4E79,#2196F3)", color: "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1 }}>
+                style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 8, border: "1.5px solid #E0E7EF", fontFamily: "inherit", fontSize: 13, outline: "none" }}
+              />
+              <button
+                onClick={() => handleSearch()}
+                disabled={loading}
+                style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg,#1F4E79,#2196F3)", color: "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1 }}
+              >
                 {loading ? "Searching…" : "Search Live Jobs"}
               </button>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -252,11 +267,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick searches */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
               {QUICK_SEARCHES.map((q) => (
-                <button key={q} onClick={() => { setQuery(q); fetchJobs(q); }}
-                  style={{ padding: "6px 14px", borderRadius: 20, border: "1.5px solid #C5D9F1", background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#1F4E79", fontFamily: "inherit" }}>
+                <button
+                  key={q}
+                  onClick={() => {
+                    setSearchText(q);
+                    handleSearch(q);
+                  }}
+                  style={{ padding: "6px 14px", borderRadius: 20, border: "1.5px solid #C5D9F1", background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#1F4E79", fontFamily: "inherit" }}
+                >
                   {q}
                 </button>
               ))}
@@ -283,59 +303,66 @@ export default function App() {
                 <div style={{ fontSize: 13, color: "#666", marginBottom: 12, fontWeight: 500 }}>
                   {filtered.length} live positions · sorted by match score
                 </div>
-                {filtered.length === 0
-                  ? <div style={{ textAlign: "center", padding: 40, color: "#bbb" }}>No jobs above {minScore}% match. Lower the filter.</div>
-                  : filtered.map((job) => (
-                      <JobCard key={job.job_id} job={job}
-                        isSaved={!!saved.find(j => j.job_id === job.job_id)}
-                        isApplied={!!applied.find(j => j.job_id === job.job_id)}
-                        onSave={() => toggle(saved, setSaved, job)}
-                        onApply={() => toggle(applied, setApplied, job)} />
-                    ))
-                }
+                {filtered.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 40, color: "#bbb" }}>No jobs above {minScore}% match. Lower the filter.</div>
+                ) : (
+                  filtered.map((job) => (
+                    <JobCard
+                      key={job.job_id}
+                      job={job}
+                      isSaved={!!saved.find((j) => j.job_id === job.job_id)}
+                      isApplied={!!applied.find((j) => j.job_id === job.job_id)}
+                      onSave={() => toggle(saved, setSaved, job)}
+                      onApply={() => toggle(applied, setApplied, job)}
+                    />
+                  ))
+                )}
               </>
             )}
           </>
         )}
 
-        {/* ── Saved Tab ── */}
         {tab === "saved" && (
           <>
             <div style={{ fontSize: 13, color: "#666", marginBottom: 14, fontWeight: 500 }}>{saved.length} saved positions</div>
-            {saved.length === 0
-              ? <div style={{ textAlign: "center", padding: 60, color: "#bbb" }}>No saved jobs yet. Click 🔖 on any job.</div>
-              : saved.map((job) => (
-                  <JobCard key={job.job_id} job={job}
-                    isSaved={true}
-                    isApplied={!!applied.find(j => j.job_id === job.job_id)}
-                    onSave={() => toggle(saved, setSaved, job)}
-                    onApply={() => toggle(applied, setApplied, job)} />
-                ))
-            }
+            {saved.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: "#bbb" }}>No saved jobs yet. Click 🔖 on any job.</div>
+            ) : (
+              saved.map((job) => (
+                <JobCard
+                  key={job.job_id}
+                  job={job}
+                  isSaved={true}
+                  isApplied={!!applied.find((j) => j.job_id === job.job_id)}
+                  onSave={() => toggle(saved, setSaved, job)}
+                  onApply={() => toggle(applied, setApplied, job)}
+                />
+              ))
+            )}
           </>
         )}
 
-        {/* ── Applied Tab ── */}
         {tab === "applied" && (
           <>
             <div style={{ fontSize: 13, color: "#666", marginBottom: 14, fontWeight: 500 }}>{applied.length} applications tracked</div>
-            {applied.length === 0
-              ? <div style={{ textAlign: "center", padding: 60, color: "#bbb" }}>No applications tracked yet. Click ✅ after applying.</div>
-              : applied.map((job) => (
-                  <div key={job.job_id} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", borderLeft: "4px solid #00C853", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: "#1A2B4A", fontSize: 15 }}>{job.job_title}</div>
-                      <div style={{ color: "#666", fontSize: 13 }}>{job.employer_name} · {job.job_city || "UAE"}</div>
-                      <div style={{ color: "#00897B", fontSize: 12, fontWeight: 600, marginTop: 4 }}>✅ Applied</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ background: scoreBg(job.score), color: scoreColor(job.score), fontWeight: 700, padding: "6px 12px", borderRadius: 8, fontFamily: "'DM Mono', monospace" }}>{job.score}%</div>
-                      <a href={job.job_apply_link} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", borderRadius: 8, background: "#1F4E79", color: "#fff", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>View ↗</a>
-                      <button onClick={() => toggle(applied, setApplied, job)} style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #FFCDD2", background: "#fff", cursor: "pointer", fontSize: 12, color: "#E53935", fontFamily: "inherit" }}>Remove</button>
-                    </div>
+            {applied.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: "#bbb" }}>No applications tracked yet. Click ✅ after applying.</div>
+            ) : (
+              applied.map((job) => (
+                <div key={job.job_id} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", borderLeft: "4px solid #00C853", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#1A2B4A", fontSize: 15 }}>{job.job_title}</div>
+                    <div style={{ color: "#666", fontSize: 13 }}>{job.employer_name} · {job.job_city || "UAE"}</div>
+                    <div style={{ color: "#00897B", fontSize: 12, fontWeight: 600, marginTop: 4 }}>✅ Applied</div>
                   </div>
-                ))
-            }
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ background: scoreBg(job.score), color: scoreColor(job.score), fontWeight: 700, padding: "6px 12px", borderRadius: 8, fontFamily: "'DM Mono', monospace" }}>{job.score}%</div>
+                    <a href={job.job_apply_link} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", borderRadius: 8, background: "#1F4E79", color: "#fff", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>View ↗</a>
+                    <button onClick={() => toggle(applied, setApplied, job)} style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #FFCDD2", background: "#fff", cursor: "pointer", fontSize: 12, color: "#E53935", fontFamily: "inherit" }}>Remove</button>
+                  </div>
+                </div>
+              ))
+            )}
           </>
         )}
       </div>
