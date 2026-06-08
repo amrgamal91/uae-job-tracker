@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-// In production (Render), set VITE_API_URL to your backend URL e.g. https://uae-job-tracker-api.onrender.com
-// In dev, Vite proxies /api → localhost:4000
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// In production on Render, API calls go to the same domain (Render serves both)
+// In dev, Vite proxies /api to localhost:4000
+const API_BASE = ""; // Empty string means same origin
 
 const PROFILE_SKILLS = [
   "Angular","React","Next.js","TypeScript","JavaScript","RxJS","Node.js",
@@ -11,12 +11,12 @@ const PROFILE_SKILLS = [
 ];
 
 const QUICK_SEARCHES = [
-  "Senior Frontend Engineer UAE",
-  "Frontend Team Lead Dubai",
-  "Angular Developer Dubai",
-  "React Developer UAE",
-  "Frontend Architect Dubai",
-  "Principal Frontend Engineer UAE",
+  "Senior Frontend Engineer",
+  "Frontend Team Lead",
+  "Angular Developer",
+  "React Developer",
+  "Frontend Architect",
+  "Principal Frontend Engineer",
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,22 +159,40 @@ export default function App() {
   const [saved, setSaved]     = useState([]);
   const [applied, setApplied] = useState([]);
   const [tab, setTab]         = useState("search");
-  const [query, setQuery]     = useState("Senior Frontend Engineer UAE");
+  const [query, setQuery]     = useState("Senior Frontend Engineer");
   const [minScore, setMinScore] = useState(0);
   const [fetched, setFetched] = useState(false);
 
   const fetchJobs = useCallback(async (q) => {
     const searchQ = q || query;
+    console.log("[Frontend] Fetching with query:", searchQ);
+    
     setLoading(true); setError(""); setJobs([]); setFetched(false);
     try {
-      const res = await fetch(`${API_BASE}/api/jobs?query=${encodeURIComponent(searchQ)}`);
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const url = `${API_BASE}/api/jobs?query=${encodeURIComponent(searchQ)}`;
+      console.log("[Frontend] Request URL:", url);
+      
+      const res = await fetch(url);
+      console.log("[Frontend] Response status:", res.status);
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log("[Frontend] Received data:", data);
+      
       if (data.error) throw new Error(data.error);
+      if (!data.data) throw new Error("No jobs data in response");
+      
       const scored = (data.data || []).map((j) => ({ ...j, ...scoreJob(j) })).sort((a, b) => b.score - a.score);
       setJobs(scored);
       setFetched(true);
-    } catch (e) { setError(e.message); }
+    } catch (e) { 
+      console.error("[Frontend] Error:", e.message);
+      setError(e.message); 
+    }
     setLoading(false);
   }, [query]);
 
